@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 void main() => runApp(MyApp());
 
@@ -45,6 +46,10 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   int _counter = 0;
+  String message = "not message";
+  static const methodChannel = const MethodChannel('common.flutter/battery');
+  static const eventChannel = const EventChannel('common.flutter/message');
+  static const basicChannel = const BasicMessageChannel('common.flutter/basic', StandardMessageCodec());
 
   void _incrementCounter() {
     setState(() {
@@ -54,7 +59,18 @@ class _MyHomePageState extends State<MyHomePage> {
       // _counter without calling setState(), then the build method would not be
       // called again, and so nothing would appear to happen.
       _counter++;
+      _getBatteryLevel();
+      sendMessage();
     });
+  }
+
+  @override
+  void initState() {
+    // TODO: implement initState
+    super.initState();
+    methodChannel.setMethodCallHandler(platformCallHandler);
+    eventChannel.receiveBroadcastStream().listen(_onEvent, onError: _onError);
+    receiveMessage();
   }
 
   @override
@@ -98,6 +114,8 @@ class _MyHomePageState extends State<MyHomePage> {
               '$_counter',
               style: Theme.of(context).textTheme.display1,
             ),
+            Text('$_batteryLevel'),
+            Text('eventChannel:$message'),
           ],
         ),
       ),
@@ -107,5 +125,58 @@ class _MyHomePageState extends State<MyHomePage> {
         child: Icon(Icons.add),
       ), // This trailing comma makes auto-formatting nicer for build methods.
     );
+  }
+
+  String _batteryLevel = 'Unknown battery level.';
+
+  Future<Null> _getBatteryLevel() async {
+    String batteryLevel;
+    try {
+      final int result = await methodChannel.invokeMethod('getBatteryLevel');
+      batteryLevel = 'Battery level at $result % .';
+    } on PlatformException catch (e) {
+      batteryLevel = "Failed to get battery level: '${e.message}'.";
+    }
+
+    setState(() {
+      _batteryLevel = batteryLevel;
+    });
+  }
+
+  Future<dynamic> platformCallHandler(MethodCall call) async {
+    switch (call.method) {
+      case "get_message":
+        return "Hello from Flutter";
+        break;
+    }
+  }
+
+  void _onEvent(Object event) {
+    setState(() {
+      message =
+      "message: $event";
+    });
+  }
+
+  void _onError(Object error) {
+    setState(() {
+      message = 'message: unknown.';
+    });
+  }
+
+  //发送消息到原生客户端 并且接收到原生客户端的回复
+  Future<String> sendMessage() async {
+    String reply = await basicChannel.send('this is flutter');
+    print("receive reply msg from native:$reply");
+    return reply;
+  }
+
+  //接收原生消息 并发送回复
+  void receiveMessage() async {
+    basicChannel.setMessageHandler((msg) async {
+      print("receive from Android:$msg");
+      return "get native message";
+    });
+
   }
 }

@@ -13,4 +13,9 @@
         <!-- Customize your theme here. -->
         <item name="android:windowBackground">@drawable/launch_background</item>
     </style>
+
+    <style name="BaseCompatTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowBackground">@drawable/launch_background</item>
+    </style>
+
 </resources>
