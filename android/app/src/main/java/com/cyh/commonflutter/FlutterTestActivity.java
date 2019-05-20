@@ -1,11 +1,16 @@
 package com.cyh.commonflutter;
 
+import android.content.Context;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Message;
 import android.support.annotation.Nullable;
 import android.util.Log;
+import android.view.WindowManager;
 
-import java.util.Timer;
-import java.util.TimerTask;
+import com.alibaba.fastjson.JSON;
+
+import java.util.HashMap;
 
 import io.flutter.app.FlutterActivity;
 import io.flutter.plugin.common.BasicMessageChannel;
@@ -13,6 +18,8 @@ import io.flutter.plugin.common.EventChannel;
 import io.flutter.plugin.common.MethodChannel;
 import io.flutter.plugin.common.StandardMessageCodec;
 import io.flutter.plugins.GeneratedPluginRegistrant;
+import io.flutter.view.FlutterNativeView;
+import io.flutter.view.FlutterView;
 
 public class FlutterTestActivity extends FlutterActivity {
 
@@ -23,12 +30,12 @@ public class FlutterTestActivity extends FlutterActivity {
     private String BASIC_CHANNEL = "common.flutter/basic";
     private String GET_BATTERY_LEVEL = "getBatteryLevel";
     private MethodChannel methodChannel;
-    private Timer timer;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         GeneratedPluginRegistrant.registerWith(this);
+
         initMethodChannel();
         getFlutterView().postDelayed(() ->
                 methodChannel.invokeMethod("get_message", null, new MethodChannel.Result() {
@@ -48,12 +55,29 @@ public class FlutterTestActivity extends FlutterActivity {
                     }
                 }), 5000);
 
-        timer = new Timer();
 
         initEventChannel();
 
         initBasicMessageChannel();
 
+    }
+
+    @Override
+    public FlutterView createFlutterView(Context context) {
+        HashMap<String, Object> map = new HashMap<>();
+        HashMap<String, Object> params = new HashMap<>();
+        params.put("version", "1.0.0");
+        params.put("name", "test");
+        map.put("path", "test_fade_app");
+        map.put("param", JSON.toJSONString(params));
+        WindowManager.LayoutParams matchParent = new WindowManager.LayoutParams(-1, -1);
+        FlutterNativeView nativeView = this.createFlutterNativeView();
+        FlutterView flutterView = new FlutterView(FlutterTestActivity.this, null, nativeView);
+        flutterView.setInitialRoute(JSON.toJSONString(map));
+        flutterView.setLayoutParams(matchParent);
+        flutterView.enableTransparentBackground();
+        this.setContentView(flutterView);
+        return flutterView;
     }
 
     private void initBasicMessageChannel() {
@@ -74,23 +98,32 @@ public class FlutterTestActivity extends FlutterActivity {
 
     }
 
-    private int count = 0;
+    Handler handler = new Handler(){
+        @Override
+        public void handleMessage(Message msg) {
+            super.handleMessage(msg);
+            int type = msg.arg1;
+            EventChannel.EventSink events = (EventChannel.EventSink) msg.obj;
+            if (type == 1) {
+                if (events != null) {
+                    events.success("当前时间:" + System.currentTimeMillis());
+                }
+            }
+        }
+    };
+
+    private int count = 10;
 
     private void initEventChannel() {
         new EventChannel(getFlutterView(), EVENT_CHANNEL).setStreamHandler(new EventChannel.StreamHandler() {
             @Override
             public void onListen(Object arguments, EventChannel.EventSink events) {
-                timer.schedule(new TimerTask() {
-                    @Override
-                    public void run() {
-                        if (count < 10) {
-                            count++;
-                            events.success("当前时间:" + System.currentTimeMillis());
-                        } else {
-                            timer.cancel();
-                        }
-                    }
-                }, 1000, 1000);
+                for (int i = 0; i < count; i++) {
+                    Message msg = new Message();
+                    msg.arg1 = 1;
+                    msg.obj = events;
+                    handler.sendMessageDelayed(msg, 1000*i);
+                }
             }
 
             @Override
@@ -125,8 +158,5 @@ public class FlutterTestActivity extends FlutterActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (timer != null) {
-            timer.cancel();
-        }
     }
 }
